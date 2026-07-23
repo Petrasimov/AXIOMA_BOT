@@ -1,0 +1,25 @@
+[Unit]
+Description=AXIOMA BOT - Telegram bot and arbitrage notifications
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=axioma
+Group=axioma
+WorkingDirectory=/home/axioma/axioma_bot
+ExecStart=/usr/bin/python3 /home/axioma/axioma_bot/main.py
+
+Restart=always
+RestartSec=10
+
+# Логи уходят в journald: journalctl -u axioma-bot -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=axioma-bot
+
+# Питон не буферизует вывод — логи видны сразу
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
