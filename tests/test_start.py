@@ -72,19 +72,38 @@ class TestShowMenu(StartTestCase):
 
 
 class TestStubs(StartTestCase):
-    """Заглушки нереализованных разделов."""
+    """Механизм заглушек для нереализованных разделов.
 
-    async def test_only_password_left(self):
+    Все пункты меню доведены до рабочего вида, поэтому STUB_TEXT пуст.
+    Сам механизм оставлен как точка расширения: новый раздел можно
+    временно показать заглушкой, не трогая роутер. Проверяем, что он
+    по-прежнему рабочий и что пароль из заглушек ушёл.
+    """
+
+    async def test_no_stubs_left(self):
         """По мере выполнения задач заглушки должны исчезать."""
-        self.assertEqual(list(start.STUB_TEXT.keys()), ['password'])
+        self.assertEqual(start.STUB_TEXT, {})
 
-    async def test_stub_shows_message(self):
-        callback = {
-            'message': {'chat': {'id': 111}, 'message_id': 5},
-            'from': {'id': 111},
-        }
-        await start.handle_menu_callback(callback, 'password')
-        self.assertTrue(self.api.any_text_contains('скоро появится', 111))
+    async def test_password_is_not_a_stub(self):
+        """Восстановление пароля реализовано (Задача 6).
+
+        Роутер отдаёт menu:password напрямую в handlers.password,
+        до обработчика заглушек действие вообще не доходит.
+        """
+        self.assertNotIn('password', start.STUB_TEXT)
+
+    async def test_stub_shows_message_when_present(self):
+        """Механизм заглушек работает, если раздел в STUB_TEXT есть."""
+        start.STUB_TEXT['demo'] = '🧪 Демо-раздел скоро появится.'
+        try:
+            callback = {
+                'message': {'chat': {'id': 111}, 'message_id': 5},
+                'from': {'id': 111},
+            }
+            await start.handle_menu_callback(callback, 'demo')
+            self.assertTrue(self.api.any_text_contains('скоро появится', 111))
+        finally:
+            start.STUB_TEXT.pop('demo', None)
 
     async def test_unknown_action_ignored(self):
         callback = {
