@@ -37,6 +37,13 @@ MAX_NOTIFICATIONS_PER_CYCLE: int = int(os.getenv('MAX_NOTIFICATIONS_PER_CYCLE', 
 
 SCANNER_URL: str = os.getenv('SCANNER_URL', 'https://axioma-scan.ru')
 
+# ─── Бэкенд C# (Задача 6) ────────────────────────────────────────────────────
+
+# Смену пароля делает бэкенд, а не бот: только он знает, каким алгоритмом
+# хешировать. Бот ходит на localhost — контейнер слушает 127.0.0.1:5000
+# и наружу не смотрит, поэтому запрос не выходит за пределы сервера.
+BACKEND_API_URL: str = os.getenv('BACKEND_API_URL', 'http://localhost:5000')
+
 # ─── NOWPayments (Задача 5) ──────────────────────────────────────────────────
 
 NOWPAYMENTS_API_KEY: str = os.getenv('NOWPAYMENTS_API_KEY', '')

@@ -298,6 +298,28 @@ async def answer_callback_query(
     return await _request('answerCallbackQuery', payload, timeout=10)
 
 
+async def delete_message(chat_id: int, message_id: int) -> bool:
+    """Удаляет сообщение.
+
+    Нужен Задаче 6: сообщение с новым паролем удаляется сразу после
+    обработки, иначе пароль остаётся висеть в истории чата открытым
+    текстом — и у пользователя, и на серверах Telegram.
+
+    Ошибку не считаем фатальной: сообщение старше 48 часов Telegram
+    удалить не даст, но это не повод ронять сценарий.
+    """
+    try:
+        await _request(
+            'deleteMessage',
+            {'chat_id': chat_id, 'message_id': message_id},
+            timeout=10,
+        )
+        return True
+    except TelegramError as e:
+        logger.debug(f'[API] Не удалось удалить сообщение {message_id}: {e}')
+        return False
+
+
 async def send_photo(
     chat_id: int,
     photo: bytes,

@@ -227,6 +227,25 @@ async def get_user_state(user_id: int) -> dict | None:
         return dict(row) if row else None
 
 
+async def get_user_login(user_id: int) -> str | None:
+    """Логин пользователя на сайте.
+
+    Нужен Задаче 6: смена пароля идёт через бэкенд, а тот принимает
+    пару логин+пароль. None означает, что строки в Users нет; пустая
+    строка — что пользователь заходил только через Telegram и логин
+    себе ещё не задавал.
+    """
+    async with _pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT "Login" AS login
+            FROM "Users"
+            WHERE "UserId" = $1
+        """, user_id)
+        if row is None:
+            return None
+        return (row['login'] or '').strip()
+
+
 async def set_notifications(user_id: int, enabled: bool) -> bool:
     """Включает или выключает уведомления.
 

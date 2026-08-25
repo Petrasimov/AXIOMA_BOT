@@ -46,6 +46,16 @@ NOT_REGISTERED = (
     'Чтобы оформить подписку, сначала войдите на сайте через Telegram.'
 )
 
+# Пока ключ NOWPayments не задан, платёж создать невозможно. Без этой
+# проверки пользователь прошёл бы весь путь — экран монет, выбор сети,
+# «создаю платёж...» — и упёрся в техническую ошибку. Честнее сказать
+# сразу и дать живой канал связи.
+PAYMENT_DISABLED = (
+    '💳 <b>Оплата скоро откроется</b>\n\n'
+    'Приём криптоплатежей ещё настраивается. Чтобы оформить подписку '
+    'сейчас — напишите менеджеру через раздел «Поддержка» в меню.'
+)
+
 
 # ─── Экран выбора монеты ─────────────────────────────────────────────────────
 
@@ -65,6 +75,14 @@ def _currency_keyboard() -> dict:
 
 async def show(chat_id: int, message_id: int | None = None):
     """Показывает экран выбора монеты."""
+    if not config.NOWPAYMENTS_API_KEY:
+        logger.warning('[PAY] NOWPAYMENTS_API_KEY не задан — раздел оплаты закрыт')
+        await api.send_message(
+            chat_id, PAYMENT_DISABLED,
+            reply_markup=keyboards.back_to_menu(),
+        )
+        return
+
     try:
         state = await db.get_user_state(chat_id)
     except Exception as e:
@@ -123,6 +141,13 @@ async def create(callback: dict, currency: str):
     if state is None:
         await api.send_message(
             chat_id, NOT_REGISTERED, reply_markup=keyboards.open_scanner(),
+        )
+        return
+
+    if not config.NOWPAYMENTS_API_KEY:
+        await api.send_message(
+            chat_id, PAYMENT_DISABLED,
+            reply_markup=keyboards.back_to_menu(),
         )
         return
 

@@ -18,7 +18,7 @@ import logging
 import config
 from bot import api
 from handlers import notifications as notify_handler
-from handlers import payment, start, support, vacancies
+from handlers import password, payment, start, support, vacancies
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 REPLY_MARKERS = {
     vacancies.RESUME_MARKER: vacancies.handle_resume,
     support.SUPPORT_MARKER:  support.handle_question,
+    password.PASSWORD_MARKER: password.handle_new_password,
 }
 
 
@@ -167,6 +168,9 @@ async def _handle_callback(callback: dict):
                 callback['message']['chat']['id'],
                 callback['message']['message_id'],
             )
+            return
+        if action == 'password':
+            await password.ask(callback['message']['chat']['id'])
             return
         await start.handle_menu_callback(callback, action)
         return
