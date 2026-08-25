@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 # Глобальный пул соединений
 _pool: asyncpg.Pool | None = None
 
+# Значения UserTradingMethods.Method — enum на стороне C#.
+# ⚠️ Маппинг подтверждён по данным: используются только 0 и 1.
+# Если Слава поменяет порядок в enum, править нужно здесь.
+METHOD_SPOT_FUTURES = 0
+METHOD_FUTURES_FUTURES = 1
+
 # Есть ли в Users колонка с датой окончания подписки.
 # Определяется при старте: колонку добавляет C#, и пока её нет,
 # бот выставляет только IsCexCexPaid без срока действия.
@@ -175,35 +181,63 @@ async def get_active_notification_users() -> list[dict]:
     - есть доступ к сканеру (IsCexCexPaid = true)
     - аккаунт активен (IsActive = true)
     - уведомления включены (ActiveNotifications = true)
+
+    Стратегии и биржи лежат не полями в UserSettings, а отдельными
+    таблицами UserTradingMethods и UserExchanges — их собираем
+    агрегатами в массивы одним запросом, чтобы не делать N+1.
+
+    NULL в настройках — нормальная ситуация: строку создаёт C# при
+    регистрации, а заполняет пользователь на сайте. Пустой порог
+    спреда означает "без фильтра", пустая сумма — дефолт 100,
+    как на фронтенде.
     """
     async with _pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT
-                u."UserId"          AS user_id,
-                us."TradeAmount"    AS trade_amount,
-                us."MinSpread"      AS min_spread,
-                us."StrategyFf"     AS strategy_ff,
-                us."StrategySf"     AS strategy_sf,
-                us."Exchanges"      AS exchanges
+                u."UserId"                          AS user_id,
+                COALESCE(us."TradeAmount", 100)     AS trade_amount,
+                COALESCE(us."SpreadThreshold", 0)   AS min_spread,
+                m.methods                           AS methods,
+                e.exchanges                         AS exchanges
             FROM "Users" u
             JOIN "UserSettings" us ON us."UserId" = u."UserId"
+            LEFT JOIN LATERAL (
+                SELECT array_agg(DISTINCT tm."Method") AS methods
+                FROM "UserTradingMethods" tm
+                WHERE tm."UserId" = u."UserId"
+            ) m ON true
+            LEFT JOIN LATERAL (
+                SELECT array_agg(DISTINCT lower(ue."Name")) AS exchanges
+                FROM "UserExchanges" ue
+                WHERE ue."UserId" = u."UserId"
+                  AND ue."IsEnabled" = true
+            ) e ON true
             WHERE u."IsCexCexPaid" = true
               AND u."IsActive" = true
               AND us."ActiveNotifications" = true
         """)
+
         result = []
         for r in rows:
             row = dict(r)
-            # Exchanges хранится как JSON строка или массив — нормализуем
-            exchanges = row.get('exchanges') or []
-            if isinstance(exchanges, str):
-                import json
-                try:
-                    exchanges = json.loads(exchanges)
-                except Exception:
-                    exchanges = []
-            row['exchanges'] = [e.lower() for e in exchanges]
+
+            # Пустой список стратегий трактуем как "разрешены обе".
+            # Иначе пользователь включил бы уведомления и не получил
+            # ни одного, не понимая почему.
+            methods = row.pop('methods', None) or []
+            if methods:
+                row['strategy_sf'] = METHOD_SPOT_FUTURES in methods
+                row['strategy_ff'] = METHOD_FUTURES_FUTURES in methods
+            else:
+                row['strategy_sf'] = True
+                row['strategy_ff'] = True
+
+            # Пустой список бирж — тоже "без фильтра": так его понимает
+            # apply_user_filters() в notifications/filters.py
+            row['exchanges'] = list(row.get('exchanges') or [])
+
             result.append(row)
+
         return result
 
 
